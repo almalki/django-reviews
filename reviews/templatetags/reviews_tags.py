@@ -18,6 +18,7 @@ def reviews_for_instance(context, instance):
     reviews = reviews_utils.get_reviews_for_instance(instance)
 
     return {
+        "request" : request,
         "reviews" : reviews,
         "has_rated" : has_rated,
         "content_id" : instance.id,
