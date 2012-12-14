@@ -40,6 +40,24 @@
         </div>
     {% endif %}
 
+
+    <div class="field">
+        <div class="label">
+            {{ form.title.label_tag }}:
+        </div>
+
+        {% if form.title.errors %}
+            <div class="error">
+                {{ form.title }}
+                {{ form.title.errors }}
+            </div>
+        {% else %}
+            <div>
+                {{ form.title }}
+            </div>
+        {% endif %}
+    </div>
+
     <div class="field">
         <div class="label">
             {{ form.comment.label_tag }}:
