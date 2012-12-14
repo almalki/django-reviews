@@ -21,7 +21,7 @@ class ReviewAddForm(ModelForm):
     """
     class Meta:
         model = Review
-        fields = ("user_name", "user_email", "comment", "score")
+        fields = ("user_name", "user_email", 'title', "comment", "score")
 
     def clean(self):
         """
