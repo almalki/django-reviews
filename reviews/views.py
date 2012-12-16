@@ -2,12 +2,11 @@
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.urlresolvers import reverse
-from django.forms import ModelForm
+from django.forms import ModelForm, Field
 from django.forms.util import ErrorList
 from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.template import RequestContext
-from django.utils.translation import ugettext_lazy as _
 
 # reviews imports
 import reviews.signals
@@ -19,6 +18,13 @@ from reviews.settings import SCORE_CHOICES
 class ReviewAddForm(ModelForm):
     """Form to add a review.
     """
+    def __init__(self, user, *args, **kwargs):
+        super(ReviewAddForm, self).__init__(*args, **kwargs)
+        self.user = user
+        if user.is_authenticated():
+            self.fields.pop('user_name')
+            self.fields.pop('user_email')
+
     class Meta:
         model = Review
         fields = ("user_name", "user_email", 'title', "comment", "score")
@@ -28,19 +34,20 @@ class ReviewAddForm(ModelForm):
         """
         # For an anonymous user the name is required. Please note that the
         # request has to be passed explicitely to the form object (see add_form)
-        msg = _(u"This field is required")
+        cleaned_data = super(ReviewAddForm, self).clean()
+        msg = Field.default_error_messages['required']
 
-        if self.request.user.is_anonymous():
+        if self.user.is_anonymous():
             if settings.REVIEWS_IS_NAME_REQUIRED:
                 if self.cleaned_data.get("user_name", "") == "":
                     self._errors["user_name"] = ErrorList([msg])
             if settings.REVIEWS_IS_EMAIL_REQUIRED:
-                if self.cleaned_data.get("user_email", "") == "":
+                if not self._errors.get("user_email", None) and self.cleaned_data.get("user_email", "") == "":
                     self._errors["user_email"] = ErrorList([msg])
 
         return self.cleaned_data
 
-def add_form(request, content_type_id, content_id, template_name="reviews/review_form.html"):
+def add_form(request, content_type_id, content_id, review_form=ReviewAddForm, template_name="reviews/review_form.html"):
     """Displays the form to add a review. Dispatches the POST request of the 
     form to save or reedit.
     """
@@ -60,7 +67,7 @@ def add_form(request, content_type_id, content_id, template_name="reviews/review
         })
 
     if request.method == "POST":
-        form = ReviewAddForm(data=request.POST)
+        form = review_form(request.user, data=request.POST)
         # "Attach" the request to the form instance in order to get the user
         # out of the request within the clean method of the form (see above).
         form.request = request
@@ -68,9 +75,9 @@ def add_form(request, content_type_id, content_id, template_name="reviews/review
             if settings.REVIEWS_SHOW_PREVIEW:
                 return preview(request)
             else:
-                return save(request)
+                return save(request, review_form=review_form)
     else:
-        form = ReviewAddForm()
+        form = review_form(request.user)
 
     return render_to_response(template_name, RequestContext(request, {
         "content_type_id" : content_type_id,
@@ -81,7 +88,7 @@ def add_form(request, content_type_id, content_id, template_name="reviews/review
         "show_preview" : settings.REVIEWS_SHOW_PREVIEW,
     }))
 
-def reedit(request, template_name="reviews/review_form.html"):
+def reedit(request, review_form=ReviewAddForm, template_name="reviews/review_form.html"):
     """Displays a form to edit a review. This is used if a reviewer re-edits
     a review after she has previewed it.
     """
@@ -105,7 +112,7 @@ def reedit(request, template_name="reviews/review_form.html"):
             "width" : (i+1) * 25,
         })
 
-    form = ReviewAddForm(data=request.POST)
+    form = review_form(request.user, data=request.POST)
     return render_to_response(template_name, RequestContext(request, {
         "content_type_id" : content_type_id,
         "content_id" : content_id,
@@ -115,18 +122,18 @@ def reedit(request, template_name="reviews/review_form.html"):
         "show_preview" : settings.REVIEWS_SHOW_PREVIEW,
     }))
 
-def reedit_or_save(request):
+def reedit_or_save(request, review_form=ReviewAddForm):
     """Edits or saves a review dependend on which button has been pressed.
     """
     if request.POST.get("edit"):
-        return reedit(request)
+        return reedit(request, review_form=review_form)
     else:
-        return save(request)
+        return save(request, review_form=review_form)
 
-def save(request):
+def save(request, review_form=ReviewAddForm):
     """Saves a review.
     """
-    form = ReviewAddForm(data=request.POST)
+    form = review_form(request.user, data=request.POST)
     form.request = request
     if form.is_valid():
         new_review = form.save(commit=False)
